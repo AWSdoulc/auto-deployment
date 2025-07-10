@@ -34,7 +34,7 @@ jobs:
         host: ${{ secrets.EC2_HOST }}
         username: ec2-user
         key: ${{ secrets.EC2_SSH_KEY }}
-        source: helm/myapp
+        source: my-python-app/helm
         target: /home/ec2-user/helm/myapp
 
     - name: Deploy on EC2 via SSH
