@@ -38,10 +38,10 @@ jobs:
         host: ${{ secrets.EC2_HOST }}
         username: ec2-user
         key: ${{ secrets.EC2_SSH_KEY }}
-        source: my-python-app/helm
+        source: helm/
         target: /home/ec2-user/helm
 
-    - name: Deployment via SSH auf EC2 ausführen
+    - name: Deployment via SSH auf EC2 ausfÃ¼hren
       uses: appleboy/ssh-action@v0.1.10
       with:
         host: ${{ secrets.EC2_HOST }}
