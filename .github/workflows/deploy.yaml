@@ -16,9 +16,9 @@ jobs:
     steps:
       - name: Code auschecken
         uses: actions/checkout@v3
-
+        
       - name: Zeige Image-Tag
-        run: echo "Image-Tag: $IMAGE_TAG"
+        #run: echo "Image-Tag: $IMAGE_TAG"
 
       - name: Docker-Image bauen
         run: docker build -t $IMAGE_NAME:$IMAGE_TAG ./my-python-app
