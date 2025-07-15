@@ -17,13 +17,17 @@ jobs:
     - name: Code auschecken
       uses: actions/checkout@v3
 
-    - name: Docker-Image bauen
-      #run: docker build -t $IMAGE_NAME:$IMAGE_TAG ./my-python-app
-      run: docker save $IMAGE_NAME:$IMAGE_TAG -o app.tar
+    - name: Zeige Image-Tag
+      run: echo "Image-Tag: $IMAGE_TAG"
 
+    - name: Docker-Image bauen
+      run: docker build -t $IMAGE_NAME:$IMAGE_TAG ./my-python-app
 
     - name: Docker-Image als TAR-Datei speichern
       run: docker save $IMAGE_NAME:$IMAGE_TAG -o app.tar
+
+    - name: Check, ob TAR-Datei erstellt wurde
+      run: ls -lh app.tar
 
     - name: Docker-Image auf EC2 kopieren
       uses: appleboy/scp-action@v0.1.4
@@ -40,7 +44,7 @@ jobs:
         host: ${{ secrets.EC2_HOST }}
         username: ec2-user
         key: ${{ secrets.EC2_SSH_KEY }}
-        source: helm/
+        source: my-python-app/helm
         target: /home/ec2-user/helm
 
     - name: Deployment via SSH auf EC2 ausführen
@@ -50,7 +54,15 @@ jobs:
         username: ec2-user
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
+          # Image-Import vorbereiten
+          if [ -d /home/ec2-user/app.tar ]; then
+            echo "WARNUNG: /home/ec2-user/app.tar ist ein Verzeichnis – wird gelöscht"
+            rm -rf /home/ec2-user/app.tar
+          fi
+
           sudo ctr --namespace k8s.io images import /home/ec2-user/app.tar
+
+          # Helm-Deployment
           helm upgrade --install my-python-app /home/ec2-user/helm \
             --set image.repository=my-python-app \
             --set image.tag=${{ github.run_number }}
