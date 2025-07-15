@@ -14,55 +14,53 @@ jobs:
       IMAGE_TAG: ${{ github.run_number }}
 
     steps:
-    - name: Code auschecken
-      uses: actions/checkout@v3
+      - name: Code auschecken
+        uses: actions/checkout@v3
 
-    - name: Zeige Image-Tag
-      run: echo "Image-Tag: $IMAGE_TAG"
+      - name: Zeige Image-Tag
+        run: echo "Image-Tag: $IMAGE_TAG"
 
-    - name: Docker-Image bauen
-      run: docker build -t $IMAGE_NAME:$IMAGE_TAG ./my-python-app
+      - name: Docker-Image bauen
+        run: docker build -t $IMAGE_NAME:$IMAGE_TAG ./my-python-app
 
-    - name: Docker-Image als TAR-Datei speichern
-      run: docker save $IMAGE_NAME:$IMAGE_TAG -o app.tar
+      - name: Docker-Image als TAR-Datei speichern
+        run: docker save $IMAGE_NAME:$IMAGE_TAG -o app.tar
 
-    - name: Check, ob TAR-Datei erstellt wurde
-      run: ls -lh app.tar
+      - name: Check, ob TAR-Datei erstellt wurde
+        run: ls -lh app.tar
 
-    - name: Docker-Image auf EC2 kopieren
-      uses: appleboy/scp-action@v0.1.4
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ec2-user
-        key: ${{ secrets.EC2_SSH_KEY }}
-        source: app.tar
-        target: /home/ec2-user/app.tar
+      - name: Docker-Image auf EC2 kopieren
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: app.tar
+          target: /home/ec2-user/app.tar
 
-    - name: Helm-Chart auf EC2 kopieren
-      uses: appleboy/scp-action@v0.1.4
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ec2-user
-        key: ${{ secrets.EC2_SSH_KEY }}
-        source: my-python-app/helm
-        target: /home/ec2-user/helm
+      - name: Helm-Chart auf EC2 kopieren
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: my-python-app/helm
+          target: /home/ec2-user/helm
 
-    - name: Deployment via SSH auf EC2 ausführen
-      uses: appleboy/ssh-action@v0.1.10
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ec2-user
-        key: ${{ secrets.EC2_SSH_KEY }}
-        script: |
-          # Image-Import vorbereiten
-          if [ -d /home/ec2-user/app.tar ]; then
-            echo "WARNUNG: /home/ec2-user/app.tar ist ein Verzeichnis – wird gelöscht"
-            rm -rf /home/ec2-user/app.tar
-          fi
+      - name: Deployment via SSH auf EC2 ausführen
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            if [ -d /home/ec2-user/app.tar ]; then
+              echo "WARNUNG: /home/ec2-user/app.tar ist ein Verzeichnis – wird gelöscht"
+              rm -rf /home/ec2-user/app.tar
+            fi
 
-          sudo ctr --namespace k8s.io images import /home/ec2-user/app.tar
+            sudo ctr --namespace k8s.io images import /home/ec2-user/app.tar
 
-          # Helm-Deployment
-          helm upgrade --install my-python-app /home/ec2-user/helm \
-            --set image.repository=my-python-app \
-            --set image.tag=${{ github.run_number }}
+            helm upgrade --install my-python-app /home/ec2-user/helm \
+              --set image.repository=my-python-app \
+              --set image.tag=${{ github.run_number }}
