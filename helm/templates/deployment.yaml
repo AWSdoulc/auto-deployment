@@ -1,9 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Values.name }}
-  labels:
-    app: {{ .Values.name }}
+  name: {{ .Release.Name }}
 spec:
   replicas: 1
   selector:
@@ -16,6 +14,6 @@ spec:
     spec:
       containers:
         - name: {{ .Release.Name }}
-          image: <your-docker-image>
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           ports:
             - containerPort: 80
