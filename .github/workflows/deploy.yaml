@@ -1,0 +1,54 @@
+name: Deployment auf EC2 mit k3s und Helm
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      IMAGE_NAME: my-python-app
+      IMAGE_TAG: ${{ github.run_number }}
+
+    steps:
+    - name: Code auschecken
+      uses: actions/checkout@v3
+
+    - name: Docker-Image bauen
+      run: docker build -t $IMAGE_NAME:$IMAGE_TAG ./my-python-app
+
+    - name: Docker-Image als TAR-Datei speichern
+      run: docker save $IMAGE_NAME:$IMAGE_TAG -o app.tar
+
+    - name: Docker-Image auf EC2 kopieren
+      uses: appleboy/scp-action@v0.1.4
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ec2-user
+        key: ${{ secrets.EC2_SSH_KEY }}
+        source: app.tar
+        target: /home/ec2-user/app.tar
+
+    - name: Helm-Chart auf EC2 kopieren
+      uses: appleboy/scp-action@v0.1.4
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ec2-user
+        key: ${{ secrets.EC2_SSH_KEY }}
+        source: my-python-app/helm
+        target: /home/ec2-user/helm
+
+    - name: Deployment via SSH auf EC2 ausführen
+      uses: appleboy/ssh-action@v0.1.10
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ec2-user
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          sudo ctr --namespace k8s.io images import /home/ec2-user/app.tar
+          helm upgrade --install my-python-app /home/ec2-user/helm \
+            --set image.repository=my-python-app \
+            --set image.tag=${{ github.run_number }}

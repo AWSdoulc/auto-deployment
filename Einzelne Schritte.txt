@@ -1,0 +1,17 @@
+- k3s installieren --> curl -sfL https://get.k3s.io | sh -
+- Helm installieren --> curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+- Docker installieren --> sudo yum install -y docker
+sudo systemctl enable --now docker
+sudo usermod -aG docker ec2-user
+- Helm-Chart erstellen
+my-python-app/
+├── app.py
+├── Dockerfile
+├── requirements.txt
+├── helm/
+│   └── myapp/
+│       ├── Chart.yaml
+│       ├── values.yaml
+│       └── templates/
+│           ├── deployment.yaml
+│           └── service.yaml
