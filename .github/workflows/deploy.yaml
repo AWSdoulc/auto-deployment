@@ -17,7 +17,7 @@ jobs:
       - name: Code auschecken
         uses: actions/checkout@v3
         
-      - name: Zeige Image-Tag
+      #- name: Zeige Image-Tag
         #run: echo "Image-Tag: $IMAGE_TAG"
 
       - name: Docker-Image bauen
