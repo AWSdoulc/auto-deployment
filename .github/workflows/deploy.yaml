@@ -14,14 +14,20 @@ jobs:
       IMAGE_TAG: ${{ github.run_number }}
 
     steps:
-    - name: Code auschecken
+    - name: Quellcode auschecken
       uses: actions/checkout@v3
 
     - name: Docker-Image bauen
-      run: docker build -t $IMAGE_NAME:$IMAGE_TAG ./my-python-app
+      run: |
+        echo "Baue Docker-Image: $IMAGE_NAME:$IMAGE_TAG"
+        docker build -t $IMAGE_NAME:$IMAGE_TAG ./my-python-app
+        docker images
 
     - name: Docker-Image als TAR speichern
-      run: docker save $IMAGE_NAME:$IMAGE_TAG -o app.tar
+      run: |
+        echo "Speichere als TAR"
+        docker save $IMAGE_NAME:$IMAGE_TAG -o app.tar
+        ls -lh app.tar
 
     - name: Docker-Image auf EC2 kopieren
       uses: appleboy/scp-action@v0.1.4
@@ -32,8 +38,8 @@ jobs:
         source: app.tar
         target: /home/ec2-user/app.tar
 
-    # Optional: Helm-Chart nur kopieren, wenn du das Chart geändert hast!
-    # - name: Helm-Chart auf EC2 kopieren
+    # Falls du das Helm-Chart **nicht bei jedem Commit** übertragen willst, kannst du diesen Schritt auskommentieren:
+    # - name: Helm-Chart auf EC2 kopieren (nur bei Bedarf)
     #   uses: appleboy/scp-action@v0.1.4
     #   with:
     #     host: ${{ secrets.EC2_HOST }}
@@ -42,14 +48,17 @@ jobs:
     #     source: my-python-app/helm
     #     target: /home/ec2-user/helm
 
-    - name: Deployment via SSH ausführen
+    - name: Deployment via SSH auf EC2 ausführen
       uses: appleboy/ssh-action@v0.1.10
       with:
         host: ${{ secrets.EC2_HOST }}
         username: ec2-user
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
+          echo "Importiere Image in k3s containerd..."
           sudo ctr --namespace k8s.io images import /home/ec2-user/app.tar
+
+          echo "Starte Helm Deployment..."
           helm upgrade --install my-python-app /home/ec2-user/helm \
             --set image.repository=my-python-app \
             --set image.tag=${{ github.run_number }}
