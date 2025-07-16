@@ -11,13 +11,9 @@ spec:
     metadata:
       labels:
         app: {{ .Release.Name }}
-    #spec:
-     # containers:
-      #  - name: {{ .Release.Name }}
-       #   image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
     spec:
-       containers:
-         - name: my-python-app
-           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+      containers:
+        - name: my-python-app
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           ports:
             - containerPort: 80
