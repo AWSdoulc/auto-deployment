@@ -1,0 +1,10 @@
+image:
+  repository: my-app          # kein Registry-URL
+  tag: ""                     # wird per CLI übergeben
+  pullPolicy: IfNotPresent    # nutzt das lokal geladene Image
+
+replicaCount: 2
+service:
+  type: ClusterIP
+  port: 80
+resources: {}
