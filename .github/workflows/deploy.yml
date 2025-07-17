@@ -42,14 +42,17 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-
+            
       # 5. Tar & Helm‑Chart auf EC2 kopieren
       - name: Copy artifacts to EC2
         run: |
           IMAGE_TAG=${{ github.sha }}
-          scp -o StrictHostKeyChecking=no \
+          # Sicherstellen, dass das Zielverzeichnis existiert
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "mkdir -p ~/deploy"
+          # -r muss vor den Quellpfaden stehen
+          scp -o StrictHostKeyChecking=no -r \
             my-app_$IMAGE_TAG.tar \
-            -r charts/my-app \
+            charts/my-app \
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/deploy/
 
       # 6. Auf EC2: Image laden & Helm‑Upgrade ausführen
