@@ -1,10 +1,10 @@
-# app.py
 from flask import Flask
+
 app = Flask(__name__)
 
 @app.route("/")
 def hello():
-    return "Hello from EC2 at " + __import__("socket").gethostname()
+    return "Hello, World from Flask on k3s!"
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=80)
+    app.run(host="0.0.0.0", port=5000)
