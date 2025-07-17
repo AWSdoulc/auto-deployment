@@ -8,6 +8,10 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.run_number }}
+      EC2_HOST: ${{ secrets.EC2_HOST }}
+      SSH_PRIV_KEY: ${{ secrets.EC2_SSH_KEY }}
 
     steps:
       - name: Checkout code
@@ -15,45 +19,36 @@ jobs:
 
       - name: Build & save Docker image
         run: |
-          docker build -t my-python-app:${{ github.run_number }} .
-          docker save -o app.tar my-python-app:${{ github.run_number}}
+          docker build -t my-python-app:${TAG} .
+          docker save -o app.tar my-python-app:${TAG}
 
       - name: Configure SSH key
-        env:
-          SSH_PRIV_KEY: ${{ secrets.EC2_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
           echo "$SSH_PRIV_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          # optional: Host-Key-Checking deaktivieren
           echo -e "Host *\n\tStrictHostKeyChecking no\n" > ~/.ssh/config
 
       - name: Copy image TAR to EC2 via scp
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
         run: |
-          scp -i ~/.ssh/deploy_key app.tar ec2-user@$EC2_HOST:/home/ec2-user/app.tar
+          scp -i ~/.ssh/deploy_key app.tar ec2-user@${EC2_HOST}:/home/ec2-user/app.tar
 
       - name: Deploy on EC2 via SSH (using Docker)
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
         run: |
-          ssh -i ~/.ssh/deploy_key ec2-user@$EC2_HOST << 'EOF'
+          ssh -i ~/.ssh/deploy_key ec2-user@${EC2_HOST} << EOF
             set -e
             # 1) Lade das Image in Docker
             sudo docker load -i /home/ec2-user/app.tar
 
-            # 2) Stoppe & entferne alten Container, falls vorhanden
-            if sudo docker ps -q --filter "name=my-python-app"; then
-              sudo docker rm -f my-python-app
-            fi
+            # 2) Stoppe alten Container (falls vorhanden), ignoriere Fehler
+            sudo docker rm -f my-python-app || true
 
-            # 3) Starte neuen Container
+            # 3) Starte neuen Container mit dem korrekten TAG
             sudo docker run -d \
               --name my-python-app \
               -p 80:80 \
-              my-python-app:${GITHUB_RUN_NUMBER}
+              my-python-app:${TAG}
 
-            # (Optional) Auf Logs prüfen
+            # 4) Zeige die letzten Logs
             sudo docker logs my-python-app --tail 20
           EOF
