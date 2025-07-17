@@ -1,54 +1,70 @@
-name: Build & Deploy to EC2
+name: CI/CD → Produktion
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
+    name: Build & Deploy to Production
     runs-on: ubuntu-latest
-    env:
-      TAG: ${{ github.run_number }}
-      EC2_HOST: ${{ secrets.EC2_HOST }}
-      SSH_PRIV_KEY: ${{ secrets.EC2_SSH_KEY }}
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      # 1. Code auschecken
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-      - name: Build & save Docker image
+      # 2. Docker‑Image bauen
+      - name: Build Docker Image
         run: |
-          docker build -t my-python-app:${TAG} .
-          docker save -o app.tar my-python-app:${TAG}
+          IMAGE_TAG=${{ github.sha }}
+          echo "Building image my-app:$IMAGE_TAG"
+          docker build -t my-app:$IMAGE_TAG .
 
-      - name: Configure SSH key
+      # 3. Image als TAR exportieren
+      - name: Save Image to Tar
+        run: |
+          IMAGE_TAG=${{ github.sha }}
+          docker save my-app:$IMAGE_TAG -o my-app_$IMAGE_TAG.tar
+          ls -lh my-app_$IMAGE_TAG.tar
+
+      # 4. SSH‑Key für EC2 anlegen
+      - name: Setup SSH Key
         run: |
           mkdir -p ~/.ssh
-          echo "$SSH_PRIV_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          echo -e "Host *\n\tStrictHostKeyChecking no\n" > ~/.ssh/config
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
 
-      - name: Copy image TAR to EC2 via scp
+      # 5. Tar & Helm‑Chart auf EC2 kopieren
+      - name: Copy artifacts to EC2
         run: |
-          scp -i ~/.ssh/deploy_key app.tar ec2-user@${EC2_HOST}:/home/ec2-user/app.tar
+          IMAGE_TAG=${{ github.sha }}
+          scp -o StrictHostKeyChecking=no \
+            my-app_$IMAGE_TAG.tar \
+            -r charts/my-app \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/deploy/
 
-      - name: Deploy on EC2 via SSH (using Docker)
+      # 6. Auf EC2: Image laden & Helm‑Upgrade ausführen
+      - name: Load Image & Helm Upgrade on EC2
         run: |
-          ssh -i ~/.ssh/deploy_key ec2-user@${EC2_HOST} << EOF
+          IMAGE_TAG=${{ github.sha }}
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
             set -e
-            # 1) Lade das Image in Docker
-            sudo docker load -i /home/ec2-user/app.tar
+            cd ~/deploy
 
-            # 2) Stoppe alten Container (falls vorhanden), ignoriere Fehler
-            sudo docker rm -f my-python-app || true
+            echo "Loading Docker image my-app:$IMAGE_TAG"
+            docker load -i my-app_$IMAGE_TAG.tar
 
-            # 3) Starte neuen Container mit dem korrekten TAG
-            sudo docker run -d \
-              --name my-python-app \
-              -p 80:80 \
-              my-python-app:${TAG}
+            echo "Export KUBECONFIG for k3s"
+            export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
-            # 4) Zeige die letzten Logs
-            sudo docker logs my-python-app --tail 20
+            echo "Deploying via Helm to namespace production"
+            helm upgrade --install my-app ./my-app \
+              --namespace production \
+              --create-namespace \
+              --set image.tag=$IMAGE_TAG \
+              --wait
+
+            echo "Deployment complete"
           EOF
