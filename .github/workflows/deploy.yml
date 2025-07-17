@@ -34,14 +34,26 @@ jobs:
         run: |
           scp -i ~/.ssh/deploy_key app.tar ec2-user@$EC2_HOST:/home/ec2-user/app.tar
 
-      - name: Deploy on EC2 via SSH
+      - name: Deploy on EC2 via SSH (using Docker)
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
         run: |
           ssh -i ~/.ssh/deploy_key ec2-user@$EC2_HOST << 'EOF'
             set -e
-            # Image importieren
-            sudo ctr --namespace k8s.io images import /home/ec2-user/app.tar
-            # Kubernetes Deployment neu starten
-            kubectl rollout restart deployment my-python-app
+            # 1) Lade das Image in Docker
+            sudo docker load -i /home/ec2-user/app.tar
+
+            # 2) Stoppe & entferne alten Container, falls vorhanden
+            if sudo docker ps -q --filter "name=my-python-app"; then
+              sudo docker rm -f my-python-app
+            fi
+
+            # 3) Starte neuen Container
+            sudo docker run -d \
+              --name my-python-app \
+              -p 80:80 \
+              my-python-app:${GITHUB_RUN_NUMBER}
+
+            # (Optional) Auf Logs prüfen
+            sudo docker logs my-python-app --tail 20
           EOF
