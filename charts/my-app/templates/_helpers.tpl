@@ -1,15 +1,26 @@
-{{/* Name des Charts */}}
+{{/* Chart-Name */}}
 {{- define "my-app.name" -}}
 {{- .Chart.Name -}}
 {{- end }}
 
-{{/* Vollständiger Release-Name: <Release-Name>-<Chart-Name> */}}
+{{/* Vollständiger Release-Name */}}
 {{- define "my-app.fullname" -}}
 {{ printf "%s-%s" .Release.Name (include "my-app.name" .) | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
-{{/* Labels für selector */}}
+{{/* Selector-Labels */}}
 {{- define "my-app.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "my-app.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{/* 
+Labels: Standard-Labels für alle Ressourcen 
+*/}}
+{{- define "my-app.labels" -}}
+helm.sh/chart: {{ include "my-app.chart" . }}
+app.kubernetes.io/name: {{ include "my-app.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/version: {{ .Chart.AppVersion }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
