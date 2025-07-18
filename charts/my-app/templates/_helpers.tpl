@@ -1,3 +1,8 @@
+{{/* Chart-Version (Name-Version) */}}
+{{- define "my-app.chart" -}}
+{{ printf "%s-%s" .Chart.Name .Chart.Version }}
+{{- end }}
+
 {{/* Chart-Name */}}
 {{- define "my-app.name" -}}
 {{- .Chart.Name -}}
@@ -14,9 +19,7 @@ app.kubernetes.io/name: {{ include "my-app.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
-{{/* 
-Labels: Standard-Labels für alle Ressourcen 
-*/}}
+{{/* Standard-Labels für alle Ressourcen */}}
 {{- define "my-app.labels" -}}
 helm.sh/chart: {{ include "my-app.chart" . }}
 app.kubernetes.io/name: {{ include "my-app.name" . }}
