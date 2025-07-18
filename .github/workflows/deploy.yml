@@ -1,6 +1,5 @@
 name: CI/CD → Produktion
 
-# Datei: .github/workflows/deploy.yml
 on:
   push:
     branches: [ main ]
@@ -10,6 +9,8 @@ jobs:
   build-and-deploy:
     name: Build & Deploy to Production
     runs-on: ubuntu-latest
+    env:
+      IMAGE_TAG: ${{ github.sha }}
 
     steps:
       # 1. Code auschecken
@@ -17,63 +18,64 @@ jobs:
         uses: actions/checkout@v3
 
       # 2. Docker‑Image bauen
-      #- name: Build Docker Image
-      #  run: |
-      #    IMAGE_TAG=${{ github.sha }}
-      #   echo "Building image my-app:$IMAGE_TAG"
-      #    docker build -t my-app:$IMAGE_TAG .
-      
       - name: Build Docker Image
         run: |
-          IMAGE_TAG=${{ github.sha }}
-          echo "Building image my-app:$IMAGE_TAG"
-          docker build -t my-app:$IMAGE_TAG .
+          echo "Building image my-app:${IMAGE_TAG}"
+          docker build -t my-app:${IMAGE_TAG} .
 
       # 3. Image als TAR exportieren
       - name: Save Image to Tar
         run: |
-          IMAGE_TAG=${{ github.sha }}
-          docker save my-app:$IMAGE_TAG -o my-app_$IMAGE_TAG.tar
-          ls -lh my-app_$IMAGE_TAG.tar
+          echo "Saving Docker image to my-app_${IMAGE_TAG}.tar"
+          docker save my-app:${IMAGE_TAG} -o my-app_${IMAGE_TAG}.tar
 
-      # 4. SSH‑Key für EC2 anlegen
+      # 4. Helm‑Chart als TAR packen
+      - name: Package Helm Chart
+        run: |
+          tar czf my-app-chart.tar.gz -C charts/my-app .
+
+      # 5. SSH‑Key für EC2 anlegen
       - name: Setup SSH Key
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-            
-      # 5. Tar & Helm‑Chart auf EC2 kopieren
+
+      # 6. Artefakte auf EC2 kopieren
       - name: Copy artifacts to EC2
         run: |
-          IMAGE_TAG=${{ github.sha }}
-          # Sicherstellen, dass das Zielverzeichnis existiert
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "mkdir -p ~/deploy"
-          # -r muss vor den Quellpfaden stehen
-          scp -o StrictHostKeyChecking=no -r \
-            my-app_$IMAGE_TAG.tar \
-            charts/my-app \
-            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/deploy/
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "mkdir -p ~/deploy/my-app"
+          scp -o StrictHostKeyChecking=no \
+            my-app_${IMAGE_TAG}.tar \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/deploy/my-app/
+          scp -o StrictHostKeyChecking=no \
+            my-app-chart.tar.gz \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/deploy/my-app/
 
-      # 6. Auf EC2: Image laden & Helm‑Upgrade ausführen
+      # 7. Auf EC2: Image laden, Chart entpacken & Helm‑Upgrade in Clean-Dir
       - name: Load Image & Helm Upgrade on EC2
         run: |
-          IMAGE_TAG=${{ github.sha }}
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} <<EOF
             set -e
-            cd ~/deploy
+            cd ~/deploy/my-app
 
-            echo "Loading Docker image my-app:$IMAGE_TAG"
-            docker load -i my-app_$IMAGE_TAG.tar
+            echo "Loading Docker image my-app:${IMAGE_TAG}"
+            docker load -i my-app_${IMAGE_TAG}.tar
 
-            echo "Export KUBECONFIG for k3s"
-            export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+            echo "Creating clean release directory"
+            rm -rf release
+            mkdir release
 
-            echo "Deploying via Helm to namespace production"
-            helm upgrade --install my-app ./my-app \
+            echo "Unpacking Helm chart into release/"
+            tar xzf my-app-chart.tar.gz -C release
+
+            echo "Deploying via Helm from release/ to namespace production"
+            cd release
+            sudo helm upgrade --install my-app . \
               --namespace production \
               --create-namespace \
-              --set image.tag=$IMAGE_TAG \
+              --kubeconfig /etc/rancher/k3s/k3s.yaml \
+              --set image.tag=${IMAGE_TAG} \
               --wait
 
             echo "Deployment complete"
