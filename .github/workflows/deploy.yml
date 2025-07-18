@@ -41,42 +41,51 @@ jobs:
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-      # 6. Artefakte auf EC2 kopieren
-      - name: Copy artifacts to EC2
+      # 6. Remote-Verzeichnis auf EC2 vorbereiten
+      - name: Prepare remote deploy directory
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "mkdir -p ~/deploy/my-app"
-          scp -o StrictHostKeyChecking=no \
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+            "mkdir -p ~/deploy/my-app"
+
+      # 7. Docker‑Image TAR hochladen
+      - name: Upload Docker TAR
+        run: |
+          scp -o StrictHostKeyChecking=no -o ServerAliveInterval=60 \
             my-app_${IMAGE_TAG}.tar \
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/deploy/my-app/
-          scp -o StrictHostKeyChecking=no \
+
+      # 8. Helm‑Chart TAR hochladen
+      - name: Upload Helm Chart TAR
+        run: |
+          scp -o StrictHostKeyChecking=no -o ServerAliveInterval=60 \
             my-app-chart.tar.gz \
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/deploy/my-app/
 
-      # 7. Auf EC2: Image laden, Chart entpacken & Helm‑Upgrade in Clean-Dir
-      - name: Load Image & Helm Upgrade on EC2
+      # 9. Remote: Image laden & Chart entpacken
+      - name: Remote: Load Image and Unpack Chart
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} <<EOF
-            set -e
-            cd ~/deploy/my-app
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} bash -lc " \
+              cd ~/deploy/my-app && \
+              echo 'Loading Docker image my-app:${IMAGE_TAG}' && \
+              docker load -i my-app_${IMAGE_TAG}.tar && \
+              echo 'Preparing release dir' && \
+              rm -rf release && mkdir release && \
+              tar xzf my-app-chart.tar.gz -C release \
+            "
 
-            echo "Loading Docker image my-app:${IMAGE_TAG}"
-            docker load -i my-app_${IMAGE_TAG}.tar
-
-            echo "Creating clean release directory"
-            rm -rf release
-            mkdir release
-
-            echo "Unpacking Helm chart into release/"
-            tar xzf my-app-chart.tar.gz -C release
-
-            echo "Deploying via Helm from release/ to namespace production"
-            cd release
-            sudo helm upgrade --install my-app . \
-              --namespace production \
-              --create-namespace \
-              --kubeconfig /etc/rancher/k3s/k3s.yaml \
-              --set image.tag=${IMAGE_TAG} \
-              --wait
-
-            echo "Deployment complete"
-          EOF
+      # 10. Remote: Helm Upgrade
+      - name: Remote: Helm Upgrade
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} bash -lc " \
+              cd ~/deploy/my-app/release && \
+              echo 'Running Helm upgrade...' && \
+              sudo helm upgrade --install my-app . \
+                --namespace production \
+                --create-namespace \
+                --kubeconfig /etc/rancher/k3s/k3s.yaml \
+                --set image.tag=${IMAGE_TAG} \
+                --wait \
+            "
