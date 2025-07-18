@@ -13,82 +13,75 @@ jobs:
       IMAGE_TAG: ${{ github.sha }}
 
     steps:
-      # 1. Code auschecken
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      # 2. Docker‑Image bauen
       - name: Build Docker Image
         run: |
           echo "Building image my-app:${IMAGE_TAG}"
           docker build -t my-app:${IMAGE_TAG} .
 
-      # 3. Image als TAR exportieren
       - name: Save Image to Tar
         run: |
           echo "Saving Docker image to my-app_${IMAGE_TAG}.tar"
           docker save my-app:${IMAGE_TAG} -o my-app_${IMAGE_TAG}.tar
 
-      # 4. Helm‑Chart als TAR packen
       - name: Package Helm Chart
         run: |
           tar czf my-app-chart.tar.gz -C charts/my-app .
 
-      # 5. SSH‑Key für EC2 anlegen
       - name: Setup SSH Key
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-      # 6. Remote-Verzeichnis anlegen
       - name: Prepare remote dir
         run: |
           ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 \
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
             "mkdir -p ~/deploy/my-app"
 
-      # 7. Artefakte hochladen
       - name: Upload Docker TAR
         run: |
           scp -o StrictHostKeyChecking=no -o ServerAliveInterval=60 \
             my-app_${IMAGE_TAG}.tar \
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/deploy/my-app/
+
       - name: Upload Helm Chart TAR
         run: |
           scp -o StrictHostKeyChecking=no -o ServerAliveInterval=60 \
             my-app-chart.tar.gz \
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/deploy/my-app/
 
-      # 8. Remote: Image laden & Chart entpacken
       - name: Remote Load Image and Unpack Chart
         run: |
-          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} <<EOF
-            set -e
-            cd ~/deploy/my-app
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          set -e
+          cd ~/deploy/my-app
 
-            echo "Loading Docker image my-app:${IMAGE_TAG}"
-            docker load -i my-app_${IMAGE_TAG}.tar
+          echo "Loading Docker image my-app:${IMAGE_TAG}"
+          docker load -i my-app_${IMAGE_TAG}.tar
 
-            echo "Preparing clean release dir"
-            rm -rf release && mkdir release
+          echo "Preparing clean release dir"
+          rm -rf release && mkdir release
 
-            echo "Unpacking Helm chart"
-            tar xzf my-app-chart.tar.gz -C release
-EOF
+          echo "Unpacking Helm chart"
+          tar xzf my-app-chart.tar.gz -C release
 
-      # 9. Remote: Helm Upgrade
+
       - name: Remote Helm Upgrade
         run: |
-          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} <<EOF
-            set -e
-            cd ~/deploy/my-app/release
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          set -e
+          cd ~/deploy/my-app/release
 
-            echo "Running Helm upgrade for my-app:${IMAGE_TAG}"
-            sudo helm upgrade --install my-app . \
-              --namespace production \
-              --create-namespace \
-              --kubeconfig /etc/rancher/k3s/k3s.yaml \
-              --set image.tag=${IMAGE_TAG} \
-              --wait
-EOF
+          echo "Running Helm upgrade for my-app:${IMAGE_TAG}"
+          sudo helm upgrade --install my-app . \
+            --namespace production \
+            --create-namespace \
+            --kubeconfig /etc/rancher/k3s/k3s.yaml \
+            --set image.tag=${IMAGE_TAG} \
+            --wait
