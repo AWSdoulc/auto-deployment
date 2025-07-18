@@ -1,15 +1,18 @@
-{{- include "my-app.labels" . | nindent 4 }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "my-app.fullname" . }}
+  labels:
+    {{- include "my-app.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
-    matchLabels: {{ include "my-app.selectorLabels" . }}
+    matchLabels:
+      {{- include "my-app.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      labels: {{ include "my-app.selectorLabels" . }}
+      labels:
+        {{- include "my-app.selectorLabels" . | nindent 8 }}
     spec:
       containers:
         - name: {{ .Chart.Name }}
@@ -17,3 +20,17 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - containerPort: {{ .Values.service.port }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.service.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.service.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
