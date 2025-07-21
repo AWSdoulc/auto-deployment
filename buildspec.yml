@@ -1,12 +1,12 @@
 version: 0.2
 
-phases:
-  install:
-    runtime-versions:
-      nodejs: 18
-    commands:
-      - echo Installing dependencies...
-      - npm ci --legacy-peer-deps
+#phases:
+#  install:
+#    runtime-versions:
+#      nodejs: 18
+#    commands:
+#      - echo Installing dependencies...
+#      - npm ci --legacy-peer-deps
 
   build:
     commands:
