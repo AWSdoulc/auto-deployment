@@ -5,14 +5,20 @@ phases:
     runtime-versions:
       nodejs: 18
     commands:
-      - echo "Nothing to install"
+      - echo "[INSTALL] nothing to install"
+
+  pre_build:
+    commands:
+      - echo "[PRE_BUILD] start"
+
   build:
     commands:
-      - echo "Build phase - nothing to build"
+      - echo "[BUILD] nothing to build"
+
   post_build:
     commands:
-      - echo "Deploying to S3..."
-      - aws s3 cp index.html s3:auto-deployment-01/ --acl public-read
+      - echo "[POST_BUILD] deploying index.html to S3://auto-deployment-01/"
+      - aws s3 cp index.html s3://auto-deployment-01/ --acl public-read
 
 artifacts:
   files:
