@@ -6,10 +6,15 @@ phases:
   pre_build:
     commands:
       - echo "[PRE_BUILD] start"
+      - ls -l  # Überprüfe, ob index.html existiert
   build:
     commands:
       - echo "[BUILD] nothing to build"
   post_build:
     commands:
       - echo "[POST_BUILD] deploying index.html to S3://auto-deployment-01/"
-      - aws s3 cp index.html s3://auto-deployment-01/  # Entferne --acl public-read
+      - aws s3 cp index.html s3://auto-deployment-01/ --sse aws:kms
+artifacts:
+  files:
+    - index.html
+  discard-paths: yes
